@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script> 
+			function setup(str){
+				var sn = str.attributes["scenario"].value;
+				var ss = str.attributes["slider"].value;
+				document.getElementById("MBoxID").value = sn+','+ss;
+
+				window.open('runme2.html', '3-D Space', 'left=100, top=100, width=800,height=600,resizeable=yes,location=yes,toolbar=yes,menubar=yes,scrollbars=no');
+				
+			}
+
+		</script> 
+		<script src="three/js/libs/dat.gui.min.js"></script>
+	</head>
+	<body>
+
+    		Select scenario: <br>
+    		<button onclick='setup(this);' scenario='kepler\c' slider='y'>Test + Slider</button><br>
+			<button onclick='setup(this);' scenario='kepler\circle' slider='n'>Circle</button><br>
+			<button onclick='setup(this);' scenario='kepler\apogej' slider='n'>Apogey</button><br>
+			<button onclick='setup(this);' scenario='kepler\cir_el' slider='n'>Cir_el</button><br>
+			<button onclick='setup(this);' scenario='kepler\ellips' slider='n'>Ellipse</button><br>
+			<button onclick='setup(this);' scenario='cosmos\bolid2' slider='n'>Bolid1</button><br>
+			<button onclick='setup(this);' scenario='cosmos\magnetic' slider='n'>Dipole</button><br>
+			<button onclick='setup(this);' scenario='cosmos\eb' slider='y'>E&B + Slider</button><br>
+			<button onclick='setup(this);' scenario='cosmos\static' slider='n'>Static</button><br>
+    		<input type="hidden" id="MBoxID">
+
+			<hr> Frames:
+			<select name="#" id="frames">
+   				<option value="1">Single</option>
+    			<option value="2">Double</option>
+  			</select> <br>
+			Eye 1:<input type="text" id="e11" size=4 value="15"><input type="text" id="e12" size=4 value="20"><input type="text" id="e13" size=4 value="30"> 
+			Eye 2:<input type="text" id="e21" size=4 value="20"><input type="text" id="e22" size=4 value="20"><input type="text" id="e23" size=4 value="30"><br>
+			Up 1: <input type="text" id="u11" size=4 value="0"><input type="text" id="u12" size=4 value="0"><input type="text" id="u13" size=4 value="1"> 
+			Up 2: <input type="text" id="u21" size=4 value="0"><input type="text" id="u22" size=4 value="0"><input type="text" id="u23" size=4 value="1"><br>
+	</body>
+</html>

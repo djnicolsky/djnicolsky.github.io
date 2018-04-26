@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>3-D Space</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #fff;
+				margin: 0px;
+				overflow: hidden;
+			}
+			#info {
+				position: absolute;
+				color: #fff;
+				top: 0px;
+				width: 100%;
+				padding: 5px;
+				text-align:center;
+			}
+			a {
+				color: #fff;
+			}
+		</style>
+	</head>
+	<body>
+		<script src="three/lib/three.js"></script>
+		<script src="three/js/controls/OrbitControls.js"></script>
+		<script src="three/js/geometries/ConvexGeometry.js"></script>
+		<script src="three/js/libs/dat.gui.js"></script>
+		<script src="three/js/Detector.js"></script>
+		<script src="three/js/libs/stats.min.js"></script>
+		<script src="three/js/effects/AnaglyphEffect.js"></script>
+		<script src="scripts/sprintf.js"></script>
+		<script src="particle.js"></script>
+		<script src="interaction.js"></script>
+		<script src="scripts/convert.js"></script>
+		<script src="field.js"></script>
+		<script src="line.js"></script>
+
+		
+		<script src="segment.js"></script>
+
+		<div style="display: none" id="myCanvases">
+		</div>
+		<script>
+
+
+		var img=[];
+		var items=[];
+		var belongs=[];
+
+		function loader(items, thingToDo, allDone) {
+    		if (!items)
+        		return;
+    		if ("undefined" === items.length)
+        		items = [items];
+    		var count = items.length;
+
+    		// this callback counts down the things to do.
+   			var thingToDoCompleted = function (items, i) {
+        		count--;
+        		if (0 == count)
+            		allDone(items);
+    		};
+
+ 		   for (var i = 0; i < items.length; i++)
+        		thingToDo(items, i, thingToDoCompleted);
+		}
+
+		function loadImage(items, i, onComplete) {
+    		var onLoad = function (e) {
+        		e.target.removeEventListener("load", onLoad);
+
+        		// this next line can be removed.
+        		// only here to prove the image was loaded.
+        		//document.body.appendChild(e.target);
+
+        		// notify that we're done.
+        		onComplete(items, i);
+    		}
+    		img[i] = new Image();
+    		img[i].addEventListener("load", onLoad, false);
+    		img[i].src = "http://localhost/physics/icons/"+items[i]+".gif";
+		}
+
+
+        var ModelScenario=opener.document.getElementById("MBoxID").value.split(',');
+
+        var request = new XMLHttpRequest();
+        request.open("GET", "http://localhost/physics/scenarios/"+ModelScenario[0]+".model", false);
+        request.send(null);
+		var ModelScript = request.responseText;
+
+		var ModelSliders = '';
+        if(ModelScenario[1] == 'y'){
+        	request.open("GET", "http://localhost/physics/scenarios/"+ModelScenario[0]+".slider", false);
+        	request.send(null);
+        	ModelSliders = request.responseText;
+        }
+
+
+
+        var extraPLibrary = {"none":"Sphere", "electron":"Electron","proton":"Proton","neutron":"Neutron","deuter":"Deuterium","trit":"Tritium","stone":"Stone","apple":"Apple","x_kg_s":"Kettlebell"};
+        var extraPictures = Object.keys(extraPLibrary);
+
+		if (!String.prototype.startsWith) {
+  			String.prototype.startsWith = function(searchString, position){
+      			position = position || 0;
+      			return this.substr(position, searchString.length) === searchString;
+  			};
+		}
+		
+        function ModelSetup(Section, Key, Source){
+			var Flag = true;
+			var id;
+
+			while(Source.length>0 && Flag){
+				Flag = ! Source.startsWith(Section);
+				Source = Source.substring(1);
+			}
+
+			Flag=true;
+			while(Source.length>0 && Flag){
+				Source = Source.substring(1);
+				Flag = ! Source.startsWith(Key);
+			}
+			id = Source.indexOf('\n');
+			Source = Source.substring(0, id-1);
+			id = Source.indexOf('=');
+			return Source.substring(id+1);
+		}
+
+		if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+		var group, camera;
+		var scene, renderer, anaglyphRenderer;	
+		var folder1, folder2, folder3, folder4, item, ScaleSlider, NSliders = 0;
+		var folderDP;
+		var DP = [];
+		var plt, sld;
+		var L = [];
+		var S;
+		var AnimationState = true;
+		var AnimationStep = 0;
+		var AnimationScale = 1;
+        var sprite2;
+        var clock = new THREE.Clock();
+		var World = {
+			// Can be changed dynamically
+			dt: 0.001,
+			Scale: -3,
+			FlagScaling : false,
+			FlagCollision : false,
+			FlagVelocities : false,
+			VelocityScale : 1,
+			VelocityScaleNonDim : 0,
+			FlagAxis : true,
+			FlagGrid : true,
+			ColorAxis : "#0000CC",
+			ColorGrid : "#888888",
+			FlagBackGround : false,
+			FileBackGround : "",
+			LB: [0.0, 0.0, 0.0],
+			UB: [0.0, 0.0, 0.0],
+			BoundingBox : true,
+			CollisionBoundary : true,
+			ColorBB : "#0000CC",
+			AxisScale: [1.0, 1.0, 1.0]
+		};
+
+		var PLT2D = [];
+		
+			var WRLD = {
+				Rx: 0.0, Ry: 0.0, Rx: 0.0,
+				Vx: 0.0, Vy: 0.0, Vz: 0.0,
+				Ax: 0.0, Ay: 0.0, Az: 0.0
+			};
+			var MAX_POINTS = 10000;
+
+
+			var fields = [];
+			var NF = ModelSetup('GLOBAL','Fields',ModelScript);
+			for(var i=0; i<=NF-1; i++){
+				var values={};
+				values["name"] = ModelSetup('Field'+i,'Name',ModelScript);
+				values["F1"] = ModelSetup('Field'+i,'Fx',ModelScript);
+				values["F2"] = ModelSetup('Field'+i,'Fy',ModelScript);
+				values["F3"] = ModelSetup('Field'+i,'Fz',ModelScript);
+				values["S1"] = ModelSetup('Field'+i,'Shift1',ModelScript);
+				values["S2"] = ModelSetup('Field'+i,'Shift2',ModelScript);
+				values["S3"] = ModelSetup('Field'+i,'Shift3',ModelScript);	
+				var tmp = ModelSetup('Field'+i,'Coordinate',ModelScript);
+				values["crd"] = 'C'; if(tmp == 'S') values["crd"] = 'S';
+				values["type"] = ModelSetup('Field'+i,'Type',ModelScript);
+
+				addNewField(values);
+			}
+
+			World.CollisionBoundary = true;
+			World.LB[0]=parseFloat(ModelSetup('COLLISION','Lx1',ModelScript));
+			World.LB[1]=parseFloat(ModelSetup('COLLISION','Ly1',ModelScript));
+			World.LB[2]=parseFloat(ModelSetup('COLLISION','Lz1',ModelScript));
+			World.UB[0]=parseFloat(ModelSetup('COLLISION','Lx2',ModelScript));
+			World.UB[1]=parseFloat(ModelSetup('COLLISION','Ly2',ModelScript));
+			World.UB[2]=parseFloat(ModelSetup('COLLISION','Lz2',ModelScript));
+
+			var tmp = ModelSetup('COLLISION','Switch',ModelScript);
+			if(tmp == '+')
+				World.CollisionBoundary = true;
+			else
+				World.CollisionBoundary = false;
+
+			var tmp = ModelSetup('COLLISION','Draw',ModelScript);
+			if(tmp == '+')
+				World.BoundingBox = true;
+			else
+				World.BoundingBox = false;
+
+
+			PLT2D.AxisX = ModelSetup('PLOT','NameX',ModelScript);
+			PLT2D.AxisY = ModelSetup('PLOT','NameY',ModelScript);
+			PLT2D.Sx = parseFloat(ModelSetup('PLOT','ScaleX',ModelScript));
+			PLT2D.Sy = parseFloat(ModelSetup('PLOT','ScaleY',ModelScript));
+			PLT2D.OffsetX = ModelSetup('PLOT','OffsetX',ModelScript);
+			PLT2D.OffsetY = ModelSetup('PLOT','OffsetY',ModelScript);
+			var pcolor = ModelSetup('PLOT','Color',ModelScript);
+			var prgb = pcolor.split(",");
+
+			PLT2D.Color = '#'+ (0x100 | parseInt(prgb[0])).toString(16).substr(1) +
+							   (0x100 | parseInt(prgb[1])).toString(16).substr(1) +
+							   (0x100 | parseInt(prgb[2])).toString(16).substr(1);
+
+
+
+			var tmp = ModelSetup('SPACE','FlagAxis',ModelScript);
+			if(tmp == '+')
+				World.FlagAxis = true;
+			else
+				World.FlagAxis = false;
+
+			var tmp = ModelSetup('SPACE','FlagGrid',ModelScript);
+			if(tmp == '+')
+				World.FlagGrid = true;
+			else
+				World.FlagGrid = false;
+
+			var tmp = ModelSetup('SPACE','FlagBackGround',ModelScript);
+			if(tmp == '+')
+				World.FlagBackGround = true;
+			else
+				World.FlagBackGround = false;
+
+			World.FileBackGround = ModelSetup('SPACE','FileBackGround',ModelScript);
+
+			var tmp = ModelSetup('SPACE','FlagCollision',ModelScript);
+			if(tmp == '+')
+				World.FlagCollision = true;
+			else
+				World.FlagCollision = false;
+
+			var tmp = ModelSetup('SPACE','FlagScalling',ModelScript);
+			if(tmp == '+')
+				World.FlagScalling = true;
+			else
+				World.FlagScalling = false;
+
+			var tmp = ModelSetup('SPACE','ColorAxis',ModelScript);
+			switch(tmp){
+				case "Black":     World.ColorAxis = '#000000'; break;
+				case "Blue":      World.ColorAxis = '#0000FF'; break;
+				case "Cyan":      World.ColorAxis = '#00FFFF'; break;
+				case "DarkGray":  World.ColorAxis = '#808080'; break;
+				case "Gray":      World.ColorAxis = '#A9A9A9'; break;
+				case "Green":     World.ColorAxis = '#00FF00'; break;
+				case "LightGray": World.ColorAxis = '#D3D3D3'; break;
+				case "Magenta":   World.ColorAxis = '#FF00FF'; break;
+				case "Orange":    World.ColorAxis = '#FFA500'; break;
+				case "Pink":      World.ColorAxis = '#FFC0CB'; break;
+				case "Red":       World.ColorAxis = '#FF0000'; break;
+				case "White":     World.ColorAxis = '#FFFFFF'; break;
+				case "Yellow":    World.ColorAxis = '#FFFF00'; break;
+				default: 		  World.ColorAxis = '#A9A9A9';
+			}
+
+			var tmp = ModelSetup('SPACE','ColorGrid',ModelScript);
+			switch(tmp){
+				case "Black":     World.ColorGrid = '#000000'; break;
+				case "Blue":      World.ColorGrid = '#0000FF'; break;
+				case "Cyan":      World.ColorGrid = '#00FFFF'; break;
+				case "DarkGray":  World.ColorGrid = '#808080'; break;
+				case "Gray":      World.ColorGrid = '#A9A9A9'; break;
+				case "Green":     World.ColorGrid = '#00FF00'; break;
+				case "LightGray": World.ColorGrid = '#D3D3D3'; break;
+				case "Magenta":   World.ColorGrid = '#FF00FF'; break;
+				case "Orange":    World.ColorGrid = '#FFA500'; break;
+				case "Pink":      World.ColorGrid = '#FFC0CB'; break;
+				case "Red":       World.ColorGrid = '#FF0000'; break;
+				case "White":     World.ColorGrid = '#FFFFFF'; break;
+				case "Yellow":    World.ColorGrid = '#FFFF00'; break;
+				default: 		  World.ColorGrid = '#A9A9A9';
+			}
+
+
+
+			var ListParticles = [];
+			var NP = parseInt(ModelSetup('GLOBAL','Particles',ModelScript));
+			for(var i=0; i<NP; i++){
+				var values={};
+				values["id"] = i;
+				values["name"] = ModelSetup('Particle'+i,'Name',ModelScript);
+				values["label"] = values["name"];
+				values["Q"] = ModelSetup('Particle'+i,'Charge',ModelScript);
+				values["M0"] = ModelSetup('Particle'+i,'Mass',ModelScript);
+				values["rx0"] = ModelSetup('Particle'+i,'Rxo',ModelScript);
+				values["ry0"] = ModelSetup('Particle'+i,'Ryo',ModelScript);
+				values["rz0"] = ModelSetup('Particle'+i,'Rzo',ModelScript);
+				values["vx0"] = ModelSetup('Particle'+i,'Vxo',ModelScript);
+				values["vy0"] = ModelSetup('Particle'+i,'Vyo',ModelScript);
+				values["vz0"] = ModelSetup('Particle'+i,'Vzo',ModelScript);
+				var ptype = ModelSetup('Particle'+i,'Type',ModelScript);
+				if(ptype == 'C')
+					values["type"]="N";
+				else if(ptype == 'P')
+					values["type"]="P";
+				else
+					values["type"]="R";
+				values["radius"] = ModelSetup('Particle'+i,'Radius',ModelScript);
+				var pcolor = ModelSetup('Particle'+i,'Color',ModelScript);
+				var prgb = pcolor.split(",");
+
+				values["color"] = '#'+ (0x100 | parseInt(prgb[0])).toString(16).substr(1) +
+									   (0x100 | parseInt(prgb[1])).toString(16).substr(1) +
+									   (0x100 | parseInt(prgb[2])).toString(16).substr(1);
+
+				var imgname=ModelSetup('Particle'+i,'Picture',ModelScript);
+				if(imgname != ""){
+					if(imgname.indexOf("#") == -1){
+						values["picture"] = imgname; //
+						items.push(imgname);
+						belongs.push(i);
+						values["pimgs"]=1;
+					}
+					else{
+						var tmp = imgname.slice(0,imgname.indexOf("#"));
+						values["picture"] = tmp;
+						values["pimgs"] = imgname.slice(imgname.indexOf("#")+1);
+						for (var ii = 0; ii < values["pimgs"]; ii++){
+							items.push(tmp+'/'+tmp+sprintf("%04d",ii+1));
+							belongs.push(i);
+						}						
+					}
+					if(document.getElementById("Canvas_"+values["picture"]) == null){
+						var canvas = document.createElement('canvas');
+						canvas.id     = "Canvas_"+values["picture"];
+						var divcanvas = document.getElementById('myCanvases');
+						divcanvas.appendChild(canvas);
+					}
+				}
+				else{
+					values["picture"] = 'none';
+					values["pimgs"] = 1;
+					var canvas=document.createElement("canvas");
+					canvas.id = "Canvas_"+values["color"].replace('#','');
+					var divcanvas = document.getElementById('myCanvases');
+					divcanvas.appendChild(canvas);
+				}
+
+				var ptrace = ModelSetup('Particle'+i,'Trace',ModelScript);
+				if(ptrace == '-')
+					values["trace"]="N";
+				else
+					values["trace"]="Y";
+				var pname = ModelSetup('Particle'+i,'ShowName',ModelScript);
+				if(pname == '-')
+					values["showlabel"]="N";
+				else
+					values["showlabel"]="Y";
+			
+				ListParticles.push(new Particle(values));
+
+				var flagAdd = 1;
+				for (var j =  0; j < extraPictures.length; j++)
+					if (values["picture"] == extraPictures[j])	flagAdd = 0;
+				if(flagAdd)
+					extraPLibrary[values["picture"]]=values["name"];
+			}
+
+			var maxBelongs = Math.max.apply(null, belongs)+1;
+			var NB = parseInt(ModelSetup('GLOBAL','Bolds',ModelScript));
+			for(var i=0; i<NB; i++){
+				var values={};
+				values["id"] = parseInt(NP)+i;
+				values["name"] = ModelSetup('Bold'+i,'Name',ModelScript);
+				values["label"] = values["name"];
+				values["Q"] = ModelSetup('Bold'+i,'Charge',ModelScript);
+				values["M0"] = ModelSetup('Bold'+i,'Mass',ModelScript);
+				values["rx0"] = ModelSetup('Bold'+i,'Rxo',ModelScript);
+				values["ry0"] = ModelSetup('Bold'+i,'Ryo',ModelScript);
+				values["rz0"] = ModelSetup('Bold'+i,'Rzo',ModelScript);
+				values["vx0"] = "0.0";
+				values["vy0"] = "0.0";
+				values["vz0"] = "0.0"
+				values["type"]="P";
+
+				values["radius"] = ModelSetup('Bold'+i,'Radius',ModelScript);
+				var pcolor = ModelSetup('Bold'+i,'Color',ModelScript);
+				var prgb = pcolor.split(",");
+
+				values["color"] = '#'+ (0x100 | parseInt(prgb[0])).toString(16).substr(1) +
+									   (0x100 | parseInt(prgb[1])).toString(16).substr(1) +
+									   (0x100 | parseInt(prgb[2])).toString(16).substr(1);
+
+				var imgname=ModelSetup('Bold'+i,'Picture',ModelScript);
+				if(imgname != ""){
+					if(imgname.indexOf("#") == -1){
+						values["picture"] = imgname; //
+						items.push(imgname);
+						belongs.push(maxBelongs+i);
+						values["pimgs"]=1;
+					}
+					else{
+						var tmp = imgname.slice(0,imgname.indexOf("#"));
+						values["picture"] = tmp;
+						values["pimgs"] = imgname.slice(imgname.indexOf("#")+1);
+						for (var ii = 0; ii < values["pimgs"]; ii++){
+							items.push(tmp+'/'+tmp+sprintf("%04d",ii+1));
+							belongs.push(maxBelongs+i);
+						}						
+					}
+					if(document.getElementById("Canvas_"+values["picture"]) == null){
+						var canvas = document.createElement('canvas');
+						canvas.id     = "Canvas_"+values["picture"];
+						var divcanvas = document.getElementById('myCanvases');
+						divcanvas.appendChild(canvas);
+					}
+				}
+				else{
+					values["picture"] = 'none';
+					values["pimgs"] = 1;
+					var canvas=document.createElement("canvas");
+					canvas.id = "Canvas_"+values["color"].replace('#','');
+					var divcanvas = document.getElementById('myCanvases');
+					divcanvas.appendChild(canvas);
+				}
+
+				var ptrace = ModelSetup('Bold'+i,'Trace',ModelScript);
+				if(ptrace == '-')
+					values["trace"]="N";
+				else
+					values["trace"]="Y";
+				var pname = ModelSetup('Bold'+i,'ShowName',ModelScript);
+				if(pname == '-')
+					values["showlabel"]="N";
+				else
+					values["showlabel"]="Y";
+			
+				ListParticles.push(new Particle(values));
+
+				var flagAdd = 1;
+				for (var j =  0; j < extraPictures.length; j++)
+					if (values["picture"] == extraPictures[j])	flagAdd = 0;
+				if(flagAdd)
+					extraPLibrary[values["picture"]]=values["name"];
+			}
+
+
+
+			
+			var extraUniquePictures = [];
+			extraPictures = Object.keys(extraPLibrary);
+
+			for (var i =  0; i < extraPictures.length; i++) {
+				var flagAdd = 1;
+				for (var j = 0; j < ListParticles.length; j++)
+					if (ListParticles[j].picture == extraPictures[i])	flagAdd = 0;
+				if(extraPictures[i] == 'none')	flagAdd = 0;
+
+				if (flagAdd){
+					items.push(extraPictures[i]);
+					belongs.push(parseInt(NP+NB+i));
+					var canvas = document.createElement('canvas');
+					canvas.id = "Canvas_"+extraPictures[i];
+					var divcanvas = document.getElementById('myCanvases');
+					divcanvas.appendChild(canvas);
+					extraUniquePictures.push(extraPictures[i]);
+				}				
+			}
+
+			var ListInteractions = [];
+			var NA = ModelSetup('GLOBAL','Actions',ModelScript);
+			for(var i=0; i<=NA-1; i++){
+				var values={};
+				values.nEE = ModelSetup('Action'+i,'Master',ModelScript);
+				values.nER = ModelSetup('Action'+i,'Slave',ModelScript);
+				
+				var tmp = ModelSetup('Action'+i,'FlagGravity',ModelScript);
+				values.G=false; if(tmp == '+') values.G=true;
+				var tmp = ModelSetup('Action'+i,'FlagElectric',ModelScript);
+				values.E=false; if(tmp == '+') values.E=true;
+				var tmp = ModelSetup('Action'+i,'FlagHook',ModelScript);
+				values.H=false; if(tmp == '+') values.H=true;
+				values.K=parseFloat(ModelSetup('Action'+i,'K',ModelScript));
+				values.R=parseFloat(ModelSetup('Action'+i,'Ro',ModelScript));
+				values.A=parseFloat(ModelSetup('Action'+i,'Friction',ModelScript));
+				var tmp = ModelSetup('Action'+i,'FlagDefine',ModelScript);
+				values.D=false; if(tmp == '+') values.D=true;
+				values.Fx=ModelSetup('Action'+i,'Force',ModelScript);
+				var tmp = ModelSetup('Action'+i,'Visible',ModelScript);
+				values.trace=false; if(tmp == '+') values.trace=true;
+
+				ListInteractions.push(new Interaction(values));
+			}
+
+					loader(items, loadImage, function () {
+
+						for(i=0; i<ListParticles.length; i++){
+							var ii = belongs.indexOf(i);
+							if(ListParticles[i].picture != 'none'){
+								var canvas = document.getElementById('Canvas_'+ListParticles[i].picture);
+  								var context = canvas.getContext('2d');
+
+  								canvas.height=img[ii].height;
+  								canvas.width=0;
+  								for(var j=0;j<items.length;j++)
+  									if(belongs[j]==i)
+  										canvas.width+=img[ii].width;
+ 									while (belongs[ii]==i  & ii < items.length){
+ 										var xtmp = (ii-belongs.indexOf(i))*img[ii].width;
+    									context.drawImage(img[ii], xtmp, 0);
+    									ii++;
+    								}
+    						}
+    						else{
+    							var canvas = document.getElementById('Canvas_'+ListParticles[i].color.replace('#',''));
+    							canvas.height=values["radius"]*2;
+  								canvas.width=values["radius"]*2;
+								var ctx=canvas.getContext("2d");
+								ctx.beginPath();
+  								ctx.arc(values["radius"],values["radius"],values["radius"],0,Math.PI*2);
+  								ctx.closePath();
+  								ctx.fillStyle=values["color"];
+  								ctx.fill();
+ 								ctx.stroke();
+    						}
+						}
+						for(i=0; i<extraUniquePictures.length; i++){
+							var ii = items.indexOf(extraUniquePictures[i]);
+							var canvas = document.getElementById('Canvas_'+extraUniquePictures[i]);
+  							var context = canvas.getContext('2d');
+
+  							canvas.height=img[ii].height;
+  							canvas.width=img[ii].width;
+  							context.drawImage(img[ii], 0, 0);
+						}
+						for (var i = items.length - 1; i >= 0; i--) {
+							if( items[i].indexOf("/") > 0) {
+								var str = items[i].slice(0,items[i].indexOf("/"));
+								items[i] = str;
+							}
+						}
+
+						plt = window.open("plot_2d.html", "", "left=800, top=100, width=400,height=600,resizeable=yes,location=no,toolbar=no,menubar=no,scrollbars=no,overflow=hidden");
+						NSliders = parseInt(ModelSetup('GLOBAL','Sliders',ModelSliders));
+						
+    					initGUI();
+						init();
+						if(NSliders>0){
+							sld = window.open("sliders.html", "", "width=300,resizeable=no,location=no,toolbar=no,menubar=no,scrollbars=no,overflow=hidden");
+							sld.innerHeight=NSliders*20;
+						}
+						animate();
+					});
+
+
+			var views = [
+				{
+					left: 0,
+					top: 0,
+					width: 0.5,
+					height: 1.0,
+					//eye: [ 15, 20, 30 ],
+					//up: [ 0, 0, 1 ],
+					eye: [parseFloat(opener.document.getElementById("e11").value), parseFloat(opener.document.getElementById("e12").value), parseFloat(opener.document.getElementById("e13").value)],
+					up: [parseFloat(opener.document.getElementById("u11").value), parseFloat(opener.document.getElementById("u12").value), parseFloat(opener.document.getElementById("u13").value)],
+					fov: 30,
+				},
+				{
+					left: 0.5,
+					top: 0.0,
+					width: 0.5,
+					height: 1.0,
+					//eye: [ 15, 20, 30 ],
+					//up: [ 0, 0, 1 ],
+					eye: [parseFloat(opener.document.getElementById("e21").value), parseFloat(opener.document.getElementById("e22").value), parseFloat(opener.document.getElementById("e23").value)],
+					up: [parseFloat(opener.document.getElementById("u21").value), parseFloat(opener.document.getElementById("u22").value), parseFloat(opener.document.getElementById("u23").value)],
+					fov: 60,
+				}
+			];
+				
+			
+
+			function init() {
+				var WWidth = window.innerWidth;//*0+400;
+				var WHeight = window.innerHeight;//*0+600;
+
+				scene = new THREE.Scene();
+
+				//renderer = new THREE.CanvasRenderer( { antialias: true } );
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				
+				renderer.setSize( WWidth, WHeight );
+
+				anaglyphRenderer = new THREE.AnaglyphEffect(renderer, window.innerWidth, window.innerHeight);
+
+				document.body.appendChild( renderer.domElement );
+
+				// camera
+				//camera = new THREE.PerspectiveCamera( 60, WWidth / WHeight, 1, 1000 );
+				//camera.up.set( 0, 0, 1 );
+				//camera.position.set( 15, 20, 30 );
+				//scene.add( camera );
+
+				if( opener.document.getElementById("frames").value == "1"){
+					views.splice(1);
+					views[0].width=1;
+					window.innerWidth=400;
+				}
+
+				for (var ii =  0; ii < views.length; ii++ ) {
+					var view = views[ii];
+					var camera = new THREE.PerspectiveCamera( view.fov, window.innerWidth / window.innerHeight, 1, 1000 );
+					camera.position.fromArray( view.eye );
+					camera.up.fromArray( view.up );
+
+					// controls
+					controls = new THREE.OrbitControls( camera, renderer.domElement );
+					controls.minDistance = 20;
+					controls.maxDistance = 50;
+					controls.maxPolarAngle = Math.PI / 2;
+
+					scene.add( new THREE.AmbientLight( 0x222222 ) );
+					
+					var light = new THREE.PointLight( 0xffffff, 1 );
+					light.position.set( 50, 50, 0 );
+					camera.add( light );
+
+					scene.add( camera );
+					views[ii].camera = camera;
+				}
+				
+
+				World.gridXY = new THREE.GridHelper(10, 100);
+				World.gridXY.rotation.x = Math.PI/2;
+				World.gridXY.material.color.set(World.ColorGrid);
+				if(!World.FlagGrid)
+					World.gridXY.visible = false;
+				scene.add(World.gridXY);
+
+				World.AxisHelper = new THREE.AxisHelper( 12 );
+				World.LabelX = makeTextSprite2( 'X',  { textColor: {r:255, g:255, b:255, a:1}});
+				World.LabelX.position.set(12, 0, 0); World.LabelX.material.color.set(World.ColorAxis);
+				World.LabelY = makeTextSprite2( 'Y',  { textColor: {r:255, g:255, b:255, a:1}});
+				World.LabelY.position.set(0, 12, 0); World.LabelY.material.color.set(World.ColorAxis);
+				World.LabelZ = makeTextSprite2( 'Z',  { textColor: {r:255, g:255, b:255, a:1}});
+				World.LabelZ.position.set(0, 0, 12); World.LabelZ.material.color.set(World.ColorAxis);
+
+				if(World.FlagAxis){
+					World.AxisHelper.visible = true;
+					World.LabelX.visible = true;
+					World.LabelY.visible = true;
+					World.LabelZ.visible = true;
+				}
+				else{
+					World.AxisHelper.visible = false;
+					World.LabelX.visible = false;
+					World.LabelY.visible = false;
+					World.LabelZ.visible = false;
+				}
+				scene.add(World.AxisHelper);
+				scene.add(World.LabelX);
+				scene.add(World.LabelY);
+				scene.add(World.LabelZ);
+
+				group = new THREE.Group();
+				scene.add( group );
+				World.time = 0;
+				AnimationScale =  Math.pow(3, World.Scale);
+
+				for (var r = 0; r < ListParticles.length; r++){
+					ListParticles[r].initialize(World.FlagVelocities);
+					for (var ii =  0; ii < views.length; ii++ ) {
+						var ptext = new createTextLabel(document);
+						ptext.setHTML(ListParticles[r].label);
+						ptext.setParent(ListParticles[r].sprite, views[ii].camera, 1/views.length, ii, ListParticles[r].showlabel);
+						document.body.appendChild(ptext.element);
+						ListParticles[r].textLabels.push(ptext);
+					}
+				}
+
+				setPInteractions();
+				for (var r = 0; r < ListParticles.length; r++)
+					for (var ii = ListParticles[r].LocalListInteractions.length - 1; ii >= 0; ii--)
+							if(ListParticles[r].LocalListInteractions[ii].iEE > -1)
+								ListParticles[r].LocalListInteractions[ii].updateEndPoints(ListParticles);
+
+				setupBoundingBox();
+				if(!World.CollisionBoundary) World.BoundingBox = false;
+				if(!World.BoundingBox){
+					World.lineBB1.visible = false;	World.lineBB2.visible = false;
+					World.lineBB3.visible = false;	World.lineBB4.visible = false;
+				}
+				addBoundingBox();
+
+				
+				S = new Segment(50, 50, 20, 0, 50, 100, 1.0, 0);
+				S.initialize();
+
+				for(var i=0;i<10;i++){
+					L[i] = new Line(30-10*i,0,10*Math.sin(0.05*i),'E');
+					L[i].initialize();
+					L[i].draw();
+				}
+
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+
+			function addBoundingBox(){
+				scene.add( World.lineBB1 );
+				scene.add( World.lineBB2 );
+				scene.add( World.lineBB3 );
+				scene.add( World.lineBB4 );
+			}
+
+			function setupBoundingBox(){
+				var material = new THREE.LineBasicMaterial({color: World.ColorBB});
+				World.geometryCube = new THREE.Geometry();
+				World.geometryCube.vertices.push(
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.UB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.UB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.UB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.UB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.UB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.LB[2] )
+				);
+				World.lineBB1 = new THREE.Line( World.geometryCube, material );
+				
+				World.geometryCube2 = new THREE.Geometry();
+				World.geometryCube2.vertices.push(
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.UB[1], AnimationScale*World.AxisScale[2]*World.UB[2] )
+				);
+				World.lineBB2 = new THREE.Line( World.geometryCube2, material );
+
+				World.geometryCube3 = new THREE.Geometry();
+				World.geometryCube3.vertices.push(
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3( AnimationScale*World.AxisScale[0]*World.UB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.UB[2] )
+				);
+				World.lineBB3 = new THREE.Line( World.geometryCube3, material );
+
+				World.geometryCube4 = new THREE.Geometry();
+				World.geometryCube4.vertices.push(
+					new THREE.Vector3(AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.LB[2] ),
+					new THREE.Vector3(AnimationScale*World.AxisScale[0]*World.LB[0], AnimationScale*World.AxisScale[1]*World.LB[1], AnimationScale*World.AxisScale[2]*World.UB[2] )
+				);
+				World.lineBB4 = new THREE.Line( World.geometryCube4, material );
+			}
+
+
+			function restartAllParticles(){
+				AnimationStep = 0;
+				World.time = 0;
+
+				for (var r = 0; r < ListParticles.length; r++)
+					ListParticles[r].restart();
+				for (var r = 0; r < ListParticles.length; r++)
+					for (var ii = ListParticles[r].LocalListInteractions.length - 1; ii >= 0; ii--)
+							if(ListParticles[r].LocalListInteractions[ii].iEE > -1)
+								ListParticles[r].LocalListInteractions[ii].updateEndPoints(ListParticles);
+				if(!plt.window.closed)
+					plt.drawAxis();
+				for(var i=0; i<NSliders; i++)
+					if(!sld.window.closed){
+						var tname = sld.gui.__controllers[i].object.label + ":" + sld.gui.__controllers[i].property;
+						sld.gui.__controllers[i].name(tname);
+					}
+			}
+
+			function addNewParticle(values){
+				var P = new Particle(values);
+            	P.initialize(World.FlagVelocities);
+            	P.updateTrace(0.0);
+
+            	for (var ii =  0; ii < views.length; ii++ ) {
+						var ptext = new createTextLabel(document);
+						ptext.setHTML(P.label);
+						ptext.setParent(P.sprite, views[ii].camera, 1/views.length, ii, P.showlabel);
+						document.body.appendChild(ptext.element);
+						P.textLabels.push(ptext);
+				}
+
+				ListParticles.push(P);
+			}
+			function cleanupParticle(r){
+				for (var ii =  0; ii < views.length; ii++ )
+					document.body.removeChild(ListParticles[r].textLabels[ii].element);
+				ListParticles[r].cleanup();
+     			//AnimationStep=0;
+			}
+
+			function setPInteractions(){
+				for (var i = ListInteractions.length - 1; i >= 0; i--) {
+					var iEE = getParticle(ListInteractions[i].nEE);
+					var iER = getParticle(ListInteractions[i].nER);
+					if((iEE<0)||(iER<0))
+						ListInteractions.splice(i,1);
+					else{
+						var values = ListInteractions[i].values;
+						values.iEE = iEE;
+						values.iER = iER;
+						values.interaction = i;
+						var I = new Interaction(values);
+						I.initialize();
+						ListParticles[iEE].LocalListInteractions.push(I);
+					}
+				}				
+			}
+
+			function cleanPInteractions(){
+				for (var i = 0; i < ListParticles.length; i++){
+					for (var ii = ListParticles[i].LocalListInteractions.length - 1; ii >= 0; ii--){
+						scene.remove(ListParticles[i].LocalListInteractions[ii].line);
+						ListParticles[i].LocalListInteractions.splice(ii,1);
+					}
+				}
+			}
+
+			function getParticle(name){
+            	for (var i = ListParticles.length - 1; i >= 0; i--)
+            		if (ListParticles[i].name == name)
+            			return i;
+            	//alert('Something went wrong Name='+name);
+            	return -1;
+            }
+
+            function addNewField(values){
+				var F = new Field(values);
+				fields.push(F);
+			}
+
+			function onWindowResize() {
+				//camera.aspect = window.innerWidth / window.innerHeight;
+				//camera.updateProjectionMatrix();
+				
+				for (var ii =  0; ii < views.length; ii++ ) {
+					views[ii].camera.aspect = window.innerWidth / window.innerHeight;
+					views[ii].camera.updateProjectionMatrix();
+				}
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				anaglyphRenderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				if(AnimationState){
+
+					for (var ii = 0; ii < 1000; ii++) {
+						for (var r = 0; r < ListParticles.length; r++)
+							ListParticles[r].preMoveParticles(World.time, World.dt);
+						for (var r = 0; r < ListParticles.length; r++)
+							ListParticles[r].moveParticles(World.time, World.dt);
+
+						World.time += World.dt;
+
+						if(World.FlagCollision)
+							checkCollision();
+
+						if(ii%100 == 0){
+							for (var r = 0; r < ListParticles.length; r++)
+								ListParticles[r].updateTraceXYZ();
+							AnimationStep++;
+							for (var r = 0; r < ListParticles.length; r++)
+								if(!plt.window.closed)
+									plt.drawTrajectory(ListParticles[r],  World.time, World.dt);
+						}
+					}
+
+					var KineticEnergy = 0;
+					for(var k=0; k<ListParticles.length; k++)
+						for(var kk=0; kk<3; kk++)
+							KineticEnergy += ListParticles[k].V[kk]*ListParticles[k].V[kk]*ListParticles[k].M/2;
+
+					
+					var x = document.getElementById("time");
+					//x.innerHTML = "v.x, v.y = " + vector.x + "|" + vector.y;
+
+					var delta = clock.getDelta();
+					for (var r = 0; r < ListParticles.length; r++){
+						ListParticles[r].updateTrace(delta);
+						for (var ii = ListParticles[r].LocalListInteractions.length - 1; ii >= 0; ii--)
+							if(ListParticles[r].LocalListInteractions[ii].iEE > -1)
+								ListParticles[r].LocalListInteractions[ii].updateEndPoints(ListParticles);
+					}
+					AnimationStep++;
+				}
+				render();
+			}
+
+			function checkCollision(){  // Replace M0 -> M
+				for(var k=0; k<ListParticles.length; k++)
+					ListParticles[k].collided = false;
+
+				for(var k=0; k<ListParticles.length; k++){  // k -- N
+					if(!ListParticles[k].collided) {
+						for(var j=k+1; j<ListParticles.length; j++){  // j -- M
+							if(!ListParticles[j].collided){
+								var DeltaX = ListParticles[j].R[0] - ListParticles[k].R[0];
+								var DeltaY = ListParticles[j].R[1] - ListParticles[k].R[1];
+								var DeltaZ = ListParticles[j].R[2] - ListParticles[k].R[2];
+								var massRatio = ListParticles[k].M0/ListParticles[j].M0;
+
+					    		var dSq = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
+								var d = Math.sqrt(dSq);
+
+				        		if (d<=(ListParticles[j].radius+ListParticles[k].radius)/1.00){ // Collision has just occurred
+									if(d==0) d=1e-10;
+									var V1c = (ListParticles[k].P[0]*DeltaX + ListParticles[k].P[1]*DeltaY + ListParticles[k].P[2]*DeltaZ)/(d*ListParticles[k].M);
+									var V2c = (ListParticles[j].P[0]*DeltaX + ListParticles[j].P[1]*DeltaY + ListParticles[j].P[2]*DeltaZ)/(d*ListParticles[j].M);
+
+									var A = 2*(V2c - V1c)/(1 + massRatio)/d;
+									var B = - A *massRatio;
+
+									var C = -2*((ListParticles[k].radius+ListParticles[j].radius)/1.00-Math.sign(V1c - V2c)*d)/(1+massRatio)/d;
+									var D = -C*massRatio;
+
+									if(ListParticles[k].type != 'P'){
+ 										ListParticles[k].P[0] += A*DeltaX*ListParticles[k].M0; //New velocities due to
+										ListParticles[k].P[1] += A*DeltaY*ListParticles[k].M0; //collision
+										ListParticles[k].P[2] += A*DeltaZ*ListParticles[k].M0;
+	
+										ListParticles[k].V[0] = ListParticles[k].P[0]/ListParticles[k].M0; //New velocities due to
+										ListParticles[k].V[1] = ListParticles[k].P[1]/ListParticles[k].M0; //collision
+										ListParticles[k].V[2] = ListParticles[k].P[2]/ListParticles[k].M0;
+
+										ListParticles[k].R[0] += C*DeltaX;//Corrected positions
+										ListParticles[k].R[1] += C*DeltaY;
+										ListParticles[k].R[2] += C*DeltaZ;
+									}
+
+									if(ListParticles[j].type != 'P'){
+										ListParticles[j].P[0] += B*DeltaX*ListParticles[j].M0;
+										ListParticles[j].P[1] += B*DeltaY*ListParticles[j].M0;
+										ListParticles[j].P[2] += B*DeltaZ*ListParticles[j].M0;
+
+										ListParticles[j].V[0] = ListParticles[j].P[0]/ListParticles[j].M0;
+										ListParticles[j].V[1] = ListParticles[j].P[1]/ListParticles[j].M0;
+										ListParticles[j].V[2] = ListParticles[j].P[2]/ListParticles[j].M0;
+
+										ListParticles[j].R[0] += D*DeltaX;
+										ListParticles[j].R[1] += D*DeltaY;
+										ListParticles[j].R[2] += D*DeltaZ;
+									}
+									ListParticles[j].collided = true;
+									j = ListParticles.length;
+								}
+							}
+						}
+					}
+					ListParticles[k].collided = true;
+				}
+			}
+
+			function pauseSimulation(){
+				AnimationState = !AnimationState;
+				if(AnimationState)
+					item.name('Pause');
+				else
+					item.name('Continue');
+			}
+
+			function render() {
+				//renderer.render( scene, camera );
+				for ( var ii = 0; ii < views.length; ++ii ) {
+					var view = views[ii];
+					var camera = view.camera;
+					var windowWidth  = window.innerWidth;
+					var windowHeight = window.innerHeight;
+					var left   = Math.floor( windowWidth  * view.left );
+					var top    = Math.floor( windowHeight * view.top );
+					var width  = Math.floor( windowWidth  * view.width );
+					var height = Math.floor( windowHeight * view.height );
+					renderer.setViewport( left, top, width, height );
+					renderer.setScissor( left, top, width, height );
+					renderer.setScissorTest( true );
+					//renderer.setClearColor( view.background );
+					camera.aspect = width / height;
+					camera.updateProjectionMatrix();
+					anaglyphRenderer.render( scene, camera );
+					//renderer.render( scene, camera );
+				}
+
+				for(var k=0; k<ListParticles.length; k++)
+					for (var ii =  0; ii < views.length; ii++ )
+						ListParticles[k].textLabels[ii].updatePosition();
+			}
+
+			function initGUI() {
+  				var gui = new dat.GUI(); //{ autoPlace: false });
+
+  				var buttonPause = {Pause: function() {pauseSimulation();}};
+				item=gui.add( buttonPause, 'Pause' );
+
+				var buttonRestart = {Restart: function() {restartAllParticles();}};
+				gui.add( buttonRestart, 'Restart' );
+				ScaleSlider = gui.add( World, "Scale", -5, 5, 0.01 ).listen();
+
+  				var buttonFields = {
+				    listFields: function() {window.open("listFields.html", "", "width=800,height=300,resizeable=no,location=no,toolbar=no,menubar=no,scrollbars=no,overflow=hidden");}
+				};
+				gui.add( buttonFields, 'listFields' ).name('List of Fields');;
+
+				var buttonParticles = {
+				    listParticles: function() {window.open("listParticles.html", "", "width=800,height=300,resizeable=no,location=no,toolbar=no,menubar=no,scrollbars=no,overflow=hidden");}
+				};
+				gui.add( buttonParticles, 'listParticles' ).name('List of Particles');
+
+				folder1 = gui.addFolder( 'Controls' );
+				folder1.add( World, "dt", 0.0, 1.0, 0.001 );
+				folder1.add( World, "FlagCollision").name('Collision');	
+
+				folder1.add( World, "FlagVelocities").name('Show Velocities').onChange(function(value) {
+					if(World.FlagVelocities)
+						for(i=0; i<ListParticles.length; i++)
+							ListParticles[i].arrow.visible = true;
+					else
+						for(i=0; i<ListParticles.length; i++)
+							ListParticles[i].arrow.visible = false;
+				} );
+				folder1.add( World, "VelocityScaleNonDim", -2, 2, 0.01).name('Velocity Scale').onChange(function(value) {
+					World.VelocityScale =  Math.pow(3, value);
+
+					for(i=0; i<ListParticles.length; i++){
+							var VelLen = Math.sqrt(ListParticles[i].V[0]*ListParticles[i].V[0] + ListParticles[i].V[1]*ListParticles[i].V[1]+ ListParticles[i].V[2]*ListParticles[i].V[2]);
+							ListParticles[i].arrow.setLength(World.VelocityScale*Math.max(VelLen, 0.001));
+					}
+				} );
+
+				folder2 = gui.addFolder( 'Options' );
+
+				folder3 = folder2.addFolder( 'Axis Properties' );
+				folder3.add( World.AxisScale, 0).min(0).max(10).name('Sx');
+				folder3.add( World.AxisScale, 1).min(0).max(10).name('Sy');
+				folder3.add( World.AxisScale, 2).min(0).max(10).name('Sz');
+
+
+
+				folder3.add( World, "FlagAxis").name('Show Axis').onChange(function(value) {
+					if(World.FlagAxis){
+						World.AxisHelper.visible = true;
+						World.LabelX.visible = true;
+						World.LabelY.visible = true;
+						World.LabelZ.visible = true;
+					}
+					else{
+						World.AxisHelper.visible = false;
+						World.LabelX.visible = false;
+						World.LabelY.visible = false;
+						World.LabelZ.visible = false;
+					}
+				} );
+
+				folder3.add( World, "FlagGrid").name('Show Grid').onChange(function(value) {
+					if(World.FlagGrid)
+						World.gridXY.visible = true;
+					else
+						World.gridXY.visible = false;
+				} );		
+
+				folder3.addColor(World, "ColorGrid").name('Grid Color').onChange(function(value) {
+					World.ColorGrid = value;
+					World.gridXY.material.color.set(value);
+				} );
+
+				folder3.addColor(World, "ColorAxis").name('Axis Color').onChange(function(value) {
+					World.ColorAxis = value;
+					World.LabelX.material.color.set(value);
+					World.LabelY.material.color.set(value);
+					World.LabelZ.material.color.set(value);
+				} );					
+			
+
+				folder4 = folder2.addFolder( 'Boundary Box Properties' );
+
+				folder4.add( World, "BoundingBox").name('Show').listen().onChange(function(value) {
+					if(World.BoundingBox){
+						World.CollisionBoundary = true;
+						World.lineBB1.visible = true;	World.lineBB2.visible = true;
+						World.lineBB3.visible = true;	World.lineBB4.visible = true;
+					}
+					else{
+						World.lineBB1.visible = false;	World.lineBB2.visible = false;
+						World.lineBB3.visible = false;	World.lineBB4.visible = false;
+					}
+				} );;
+				folder4.add( World, "CollisionBoundary").name('Collisions').listen().onChange(function(value) {
+					if(!World.CollisionBoundary) {
+						World.BoundingBox = false;
+						World.lineBB1.visible = false;	World.lineBB2.visible = false;
+						World.lineBB3.visible = false;	World.lineBB4.visible = false;
+					}
+				} );
+				folder4.addColor(World, "ColorBB").name('Box Color').onChange(function(value) {
+					World.ColorBB = value;
+					World.lineBB1.material.color.set(value);
+				} );
+
+				var BB=[];
+				BB[0]=folder4.add( World.LB, 0, World.LB[0]).min(-1e10).name('X Min');
+				BB[1]=folder4.add( World.LB, 1, World.LB[1]).min(-1e10).name('Y Min');
+				BB[2]=folder4.add( World.LB, 2, World.LB[2]).min(-1e10).name('Z Min');
+				BB[3]=folder4.add( World.UB, 0, World.UB[0]).min(-1e10).name('X Max');
+				BB[4]=folder4.add( World.UB, 1, World.UB[1]).min(-1e10).name('Y Max');
+				BB[5]=folder4.add( World.UB, 2, World.UB[2]).min(-1e10).name('Z Max');
+
+
+				//folder1.open();
+				////folder2.open();
+				gui.close();
+
+				for(var i=0; i<3; i++)
+					BB[i].onChange(function(value) {
+						for(var ii=0; ii<3; ii++)
+							World.LB[ii] = Math.min(World.LB[ii], World.UB[ii]);
+						this.updateDisplay();
+						updateCube();
+					})
+				for(var i=3; i<6; i++)
+					BB[i].onChange(function(value) {
+						for(var ii=0; ii<3; ii++)
+							World.UB[ii] = Math.max(World.LB[ii], World.UB[ii]);
+						this.updateDisplay();
+						updateCube();
+					})
+
+				ScaleSlider.onChange(function(value) {
+					AnimationScale =  Math.pow(3, value);
+						for (var r = 0; r < ListParticles.length; r++){
+
+							ListParticles[r].sprite.position.x = AnimationScale*World.AxisScale[0]*ListParticles[r].R[0];
+							ListParticles[r].sprite.position.y = AnimationScale*World.AxisScale[1]*ListParticles[r].R[1];
+							ListParticles[r].sprite.position.z = AnimationScale*World.AxisScale[2]*ListParticles[r].R[2];
+
+							var AverageAxisScale = (World.AxisScale[0]+World.AxisScale[1]+World.AxisScale[2])/3;
+							var sphereGeometry = new THREE.SphereGeometry(AnimationScale*AverageAxisScale*ListParticles[r].radius, 16, 16 );
+							sphereGeometry.needsUpdate = true;
+							ListParticles[r].ball.geometry = sphereGeometry;
+							ListParticles[r].ball.position.x = AnimationScale*World.AxisScale[0]*ListParticles[r].R[0];
+							ListParticles[r].ball.position.y = AnimationScale*World.AxisScale[1]*ListParticles[r].R[1];
+							ListParticles[r].ball.position.z = AnimationScale*World.AxisScale[2]*ListParticles[r].R[2];
+
+							ListParticles[r].arrow.position.x = AnimationScale*World.AxisScale[0]*ListParticles[r].R[0];
+							ListParticles[r].arrow.position.y = AnimationScale*World.AxisScale[1]*ListParticles[r].R[1];
+							ListParticles[r].arrow.position.z = AnimationScale*World.AxisScale[2]*ListParticles[r].R[2];
+
+							var dir = new THREE.Vector3( AnimationScale*World.AxisScale[0]*ListParticles[r].V[0], AnimationScale*World.AxisScale[1]*ListParticles[r].V[1], AnimationScale*World.AxisScale[2]*ListParticles[r].V[2]);
+							var VelLen = Math.sqrt(ListParticles[r].V[0]*ListParticles[r].V[0] + ListParticles[r].V[1]*ListParticles[r].V[1]+ ListParticles[r].V[2]*ListParticles[r].V[2]);;
+							dir.normalize();
+							ListParticles[r].arrow.setDirection(dir);
+							ListParticles[r].arrow.setLength(World.VelocityScale*Math.max(VelLen, 0.001));
+
+							var positions = ListParticles[r].traceLine.geometry.attributes.position.array;
+							for (var i = 0; i <= Math.min(AnimationStep,MAX_POINTS); i++)
+								for (var j=0; j<3; j++)
+									positions[i*3+j] = AnimationScale*World.AxisScale[j]*ListParticles[r].traceXYZ[i*3+j];
+							ListParticles[r].traceLine.geometry.attributes.position.needsUpdate = true;
+
+							for (var ii = ListParticles[r].LocalListInteractions.length - 1; ii >= 0; ii--)
+								if(ListParticles[r].LocalListInteractions[ii].iEE > -1)
+									ListParticles[r].LocalListInteractions[ii].updateEndPoints(ListParticles);
+						}
+						updateCube();
+						for(var i=0;i<L.length;i++)
+							L[i].updateScale();
+						S.updateScale();
+				});
+			}
+
+			function updateCube(){
+				World.geometryCube.vertices[0].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[0].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[0].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+				World.geometryCube.vertices[1].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube.vertices[1].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[1].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+				World.geometryCube.vertices[2].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube.vertices[2].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube.vertices[2].z= AnimationScale*World.AxisScale[2]*World.UB[2];				
+				World.geometryCube.vertices[3].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[3].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube.vertices[3].z= AnimationScale*World.AxisScale[2]*World.UB[2];				
+				World.geometryCube.vertices[4].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[4].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[4].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+
+				World.geometryCube.vertices[5].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[5].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[5].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube.vertices[6].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube.vertices[6].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[6].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube.vertices[7].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube.vertices[7].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube.vertices[7].z= AnimationScale*World.AxisScale[2]*World.LB[2];				
+				World.geometryCube.vertices[8].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[8].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube.vertices[8].z= AnimationScale*World.AxisScale[2]*World.LB[2];				
+				World.geometryCube.vertices[9].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube.vertices[9].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube.vertices[9].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube.verticesNeedUpdate = true;
+
+				World.geometryCube2.vertices[0].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube2.vertices[0].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube2.vertices[0].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+				World.geometryCube2.vertices[1].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube2.vertices[1].y= AnimationScale*World.AxisScale[1]*World.UB[1];
+				World.geometryCube2.vertices[1].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube2.verticesNeedUpdate = true;
+				World.geometryCube3.vertices[0].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube3.vertices[0].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube3.vertices[0].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+				World.geometryCube3.vertices[1].x= AnimationScale*World.AxisScale[0]*World.UB[0];
+				World.geometryCube3.vertices[1].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube3.vertices[1].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube3.verticesNeedUpdate = true;
+				World.geometryCube4.vertices[0].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube4.vertices[0].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube4.vertices[0].z= AnimationScale*World.AxisScale[2]*World.UB[2];
+				World.geometryCube4.vertices[1].x= AnimationScale*World.AxisScale[0]*World.LB[0];
+				World.geometryCube4.vertices[1].y= AnimationScale*World.AxisScale[1]*World.LB[1];
+				World.geometryCube4.vertices[1].z= AnimationScale*World.AxisScale[2]*World.LB[2];
+				World.geometryCube4.verticesNeedUpdate = true;
+			}
+
+		window.onunload = function(){
+			if(!plt.window.closed)
+				plt.close();
+			if(sld!=null)
+				if(!sld.window.closed)
+					sld.close();
+		};
+
+
+		</script>
+		<!--p id="time"></p-->
+	</body>
+</html>
