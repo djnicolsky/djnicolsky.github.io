@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+	    <script src="https://unpkg.com/xregexp/xregexp-all.js"></script>
+	    <script src="scripts/fx.js"></script>
+		<script> 
+
+
+			function fNEW(f, R, V, t){
+				var r = Math.sqrt(R[0]*R[0]+R[1]*R[1]+R[2]*R[2]);
+				var v = Math.sqrt(V[0]*V[0]+V[1]*V[1]+V[2]*V[2]);
+				return f(t, r, v, R[0], R[1], R[2], V[0], V[1], V[2]);
+			}
+
+			function fNEWP2P(f, Q1, M1, Rad1, R1, V1, Q2, M2, Rad2, R2, V2, t){
+				var r = Math.sqrt((R1[0]-R2[0])*(R1[0]-R2[0])+(R1[1]-R2[1])*(R1[1]-R2[1])+(R1[2]-R2[2])*(R1[2]-R2[2]));
+				var v = Math.sqrt((V1[0]-V2[0])*(V1[0]-V2[0])+(V1[1]-V2[1])*(V1[1]-V2[1])+(V1[2]-V2[2])*(V1[2]-V2[2]));
+
+				return f(t, r, v, R1[0], R2[0], R1[1], R2[1], R1[2], R2[2], V1[0], V2[0], V1[1], V2[1], V1[2], V2[2], M1, M2, Q1, Q2, Rad1, Rad2);
+			}
+			//Function('T', 'r', 'v', 'Xm', 'Xs', 'Ym', 'Ys', 'Zm', 'Zs', 'Um', 'Us', 'Vm', 'Vs', 'Wm', 'Ws', 'Mm', 'Ms', 'Qm', 'Qs', 'Dm', 'Ds', 'return ('+Input+');');
+
+			function Heaviside(L,x,R){
+				if((L<=x)&&(x<=R))
+					return 1;
+				else
+					return 0;
+			}
+
+            var pi2=1.57079632679;
+            var R = [0, 0, 0];
+            var V = [0, 0, 0];
+			var Input = '1+e*sin(pi)+0*2^{0-1#cos(T)#1}^3+0*sin(T)';
+
+            console.time('Original');
+            var res = 0;
+            for(var i=0; i<10000; i++)
+				res+=fPIN(Input, R, V, pi2*i/1000);
+			console.timeEnd('Original');
+
+
+			tmp = Input; Input = "";
+            while(tmp.includes("e")){
+            	var ii = tmp.search("e");
+            	Input += tmp.substr(0,ii)+2.718281828459045;
+            	tmp = tmp.substr(ii+1,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.includes("pi")){
+            	var ii = tmp.search("pi");
+            	Input += tmp.substr(0,ii)+3.14159265358979;
+            	tmp = tmp.substr(ii+2,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.includes("cos")){
+            	var ii = tmp.search("cos");
+            	Input += tmp.substr(0,ii)+'Math.cos';
+            	tmp = tmp.substr(ii+3,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.includes("sin")){
+            	var ii = tmp.search("sin");
+            	Input += tmp.substr(0,ii)+'Math.sin';
+            	tmp = tmp.substr(ii+3,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.includes("ln")){
+            	var ii = tmp.search("ln");
+            	Input += tmp.substr(0,ii)+'Math.log';
+            	tmp = tmp.substr(ii+2,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.indexOf("{")>-1){
+            	var ii = tmp.search("{");
+            	Input += tmp.substr(0,ii)+'Heaviside(';
+            	tmp = tmp.substr(ii+1,tmp.lenth);
+            }
+			Input += tmp;
+			tmp = Input; Input = "";
+            while(tmp.indexOf("}")>-1){
+            	var ii = tmp.search("}");
+            	Input += tmp.substr(0,ii)+')';
+            	tmp = tmp.substr(ii+1,tmp.lenth);
+            }
+			Input += tmp;
+			tmp = Input; Input = "";
+            while(tmp.indexOf("#")>-1){
+            	var ii = tmp.search("#");
+            	Input += tmp.substr(0,ii)+',';
+            	tmp = tmp.substr(ii+1,tmp.lenth);
+            }
+			Input += tmp;
+
+			tmp = Input; Input = "";
+            while(tmp.indexOf("|")>-1){
+            	var ii = tmp.indexOf("|");
+            	if(ii>0){
+            		var ch = tmp.charAt(ii-1);
+            		if('+-/*^(|'.indexOf(ch)>-1){
+            			Input += tmp.substr(0,ii)+'Math.abs(';
+	            		tmp = tmp.substr(ii+1,tmp.lenth);	
+    	        	}else{
+						Input += tmp.substr(0,ii)+')';
+            			tmp = tmp.substr(ii+1,tmp.lenth);
+            		}
+            	}else{
+					Input += 'Math.abs(';
+	            	tmp = tmp.substr(ii+1,tmp.lenth);
+            	}
+            }
+			Input += tmp;
+
+            while(Input.indexOf("^")>-1){
+            	tmp = Input; Input = "";
+            	var ii = tmp.indexOf("^");
+
+            	var i = ii-1; var level = 0; var flag = 0;
+            	while((i>=0)&&(flag==0)){
+            		var ch = tmp.charAt(i);
+            		if(('+-/*^'.indexOf(ch)>-1)&&(level == 0)) 
+            				flag = 1;
+            		if(')'.indexOf(ch)>-1) level--; 
+            		if('('.indexOf(ch)>-1) level++; 
+            		i--;
+            	}
+            	i++;
+
+            	var j = ii+1; var level = 0; var flag = 0;
+            	while((j<=tmp.length)&&(flag==0)){
+            		var ch = tmp.charAt(j);
+            		if(('+-/*^'.indexOf(ch)>-1)&&(level == 0)) 
+            			flag = 1; 
+            		if('('.indexOf(ch)>-1) level--; 
+            		if(')'.indexOf(ch)>-1) level++; 
+            		j++;
+            	}
+            	j--;
+
+            	Input += tmp.substr(0,i+1)+'Math.pow('+tmp.substr(i+1,ii-i-1)+','+tmp.substr(ii+1,j-ii-1)+')';
+            	Input += tmp.substr(j,tmp.length);
+            }
+			
+
+
+            var InputFunc = new Function('T', 'r', 'v', 'X', 'Y', 'Z', 'Vx', 'Vy', 'Vz', 'return ('+Input+');');
+			
+			console.time('New');
+			var res1 = 0;
+			for(var i=0; i<10000; i++)
+				res1+=fNEW(InputFunc, R, V, pi2*i/1000);
+			console.timeEnd('New');
+
+			alert(''+res+' D='+(res-res1));
+			
+		</script> 
+	</head>
+	<body>
+	</body>
+</html>
