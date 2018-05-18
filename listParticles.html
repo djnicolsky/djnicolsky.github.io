@@ -1,0 +1,263 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>List of particles</title>
+		
+		<script src="three/lib/three.js"></script>
+		<script src="editablegrid/editablegrid.js"></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_renderers.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_editors.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_validators.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_utils.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_charts.js" ></script>
+		<link rel="stylesheet" href="editablegrid/editablegrid.css" type="text/css" media="screen">
+		
+		<script src="scripts/w3color.js"></script>
+		<script src="editablegrid/extensions/jquery/jquery-1.6.4.min.js" ></script>
+		<script src="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.min.js" ></script>
+		<link rel="stylesheet" href="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.css" type="text/css" media="screen">
+		<script src="particle.js"></script>
+
+        <link rel="stylesheet" type="text/css" href="simple.css" media="screen"/>
+		
+		<script>
+			var wi, wi_values;
+			window.onload = function() {
+
+				// this approach is interesting if you need to dynamically create data in Javascript
+                var metaParticle = [];
+				metaParticle.push({ name: "label", label: "Label", datatype: "string", editable: true});
+				metaParticle.push({ name: "Q", label: "Q", datatype: "string", editable: true});
+				metaParticle.push({ name: "M0", label: "M", datatype: "string", editable: true});
+				metaParticle.push({ name: "rx0", label:"X0", datatype: "string", editable: true});
+				metaParticle.push({ name: "ry0", label:"Y0", datatype: "string", editable: true});
+				metaParticle.push({ name: "rz0", label:"Z0", datatype: "string", editable: true});
+				metaParticle.push({ name: "vx0", label:"U0", datatype: "string", editable: true});
+				metaParticle.push({ name: "vy0", label:"V0", datatype: "string", editable: true});
+				metaParticle.push({ name: "vz0", label:"W0", datatype: "string", editable: true});
+				metaParticle.push({ name: "type", label: "Type", datatype: "string", editable: true});
+				metaParticle.push({ name: "radius", label:"R", datatype: "string", editable: true});
+				metaParticle.push({ name: "color", label: "Color", datatype: "string", editable: false});
+				metaParticle.push({ name: "picture", label: "Icon", datatype: "string", editable: true});
+				metaParticle.push({ name: "trace", label: "Trace", datatype: "string", editable: true});
+				metaParticle.push({ name: "showlabel", label: "Show label", datatype: "string", editable: true});
+				metaParticle.push({ name: "action", label: "D/D", datatype: "html", editable: false});
+				metaParticle.push({ name: "id", label: "ID", datatype: "integer", editable: false});
+				metaParticle.push({ name: "pimgs", label: "PIMGSs", datatype: "integer", editable: false});
+				metaParticle.push({ name: "name", label: "Name", datatype: "string", editable: false});
+
+				//metaParticle.push({ name: "canvas", label: "CanVas", datatype: "integer", editable: false});
+
+
+				metaParticle[12].values = {};
+				metaParticle[12].values["Particles"] = parent.opener.extraPLibrary;
+
+				metaParticle[9].values = {"N":"Non-relativistic", "R":"Relativistic", "P":"Pin"};
+				metaParticle[13].values = {"Y":"Yes", "N":"No"};
+				metaParticle[14].values = {"Y":"Yes", "N":"No"};
+
+				ParticleGrid = new EditableGrid("3DSpaceParticles");
+
+				var newArray = [];
+				for(var i=0; i<parent.opener.ListParticles.length; i++){
+					var tmp = parent.opener.ListParticles[i].returnValues();
+					newArray.push({name: 'values', values: JSON.parse(JSON.stringify(tmp))});
+				}
+				ParticleGrid.load({"metadata": metaParticle, "data": newArray});
+				//ParticleGrid.load({"metadata": metaParticle, "data": parent.opener.ListParticles});
+				
+                var ap = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML = "<a onclick=\"if (confirm('Are you sure you want to delete this particle? ')) ParticleGrid.remove(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+			    					 "<img src=\"delete.png\" border=\"0\" alt=\"delete\" title=\"delete\"/></a>";
+		         	cell.innerHTML+= "&nbsp;<a onclick=\"ParticleGrid.duplicate(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+		                         	 "<img src=\"duplicate.png\" border=\"0\" alt=\"duplicate\" title=\"duplicate\"/></a>";
+		            cell.innerHTML+= "&nbsp;<a onclick=\"ParticleGrid.interaction(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+		                         	 "<img src=\"interaction.png\" border=\"0\" alt=\"interaction\" title=\"interaction\"/></a>";
+		       	}});
+
+		       	var clr = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML =  "<input type='color' id='Color"+cell.rowIndex+"' onchange='clickColor("+cell.rowIndex+")' value='"+value.toLowerCase()+"' style='width:85%;''>";
+		     		
+		     	} });
+
+		       	var bb = new CellRenderer({render: function(cell, value) { 
+		       		if(value != 'none'){
+		       			cell.innerHTML = "<img src=\"icons/" + value + ".gif\">";
+		       			var tmp_pims=0; var firstOccurrence=0; var firstBelongs;
+		       			for(var j=0;j<parent.opener.items.length;j++)
+							if(parent.opener.items[j] == value) {
+								if(firstOccurrence == 0){
+									firstOccurrence=1; 
+									firstBelongs = parent.opener.belongs[j];
+								}
+								if(parent.opener.belongs[j] == firstBelongs)
+									tmp_pims++;
+							}
+						ParticleGrid.setValueAt(cell.rowIndex,17,tmp_pims);
+		       		}
+		       		else{
+		       			cell.innerHTML = "<canvas style='display: block; margin: auto' id='canvas_"+cell.rowIndex+"' width=16 height=16></canvas>";
+		       			var canvas=document.getElementById("canvas_"+cell.rowIndex);
+		       			var ctx=canvas.getContext("2d");
+						ctx.beginPath();
+  						ctx.arc(7.5,7.5,7.5,0,Math.PI*2);
+  						ctx.closePath();
+  						ctx.fillStyle=window.ParticleGrid.getValueAt(cell.rowIndex,11);
+  						ctx.fill();
+ 						ctx.stroke();
+ 						ParticleGrid.setValueAt(cell.rowIndex,17,1);
+		       		}
+		       	} });
+		        ParticleGrid.setCellRenderer("picture", bb); 
+                ParticleGrid.setCellRenderer("action", ap);
+                ParticleGrid.setCellRenderer("color", clr);
+
+
+				ParticleGrid.renderGrid("tableParticles", "testgrid");
+
+				// register the function that will handle model changes
+				ParticleGrid.modelChanged = function(rowIndex, columnIndex, oldValue, newValue, row) { 
+					if((this.getColumnName(columnIndex)=='type')&&(newValue=='P'))
+						for(var i=6;i<9;i++) this.setValueAt(rowIndex,i,'N/A');
+					if((this.getColumnName(columnIndex)=='type')&&(oldValue=='P'))
+						for(var i=6;i<9;i++) this.setValueAt(rowIndex,i,'0');
+					//alert("Value for '" + this.getColumnName(columnIndex) + "' in row " + this.getRowId(rowIndex) + " has changed from '" + oldValue + "' to '" + newValue + "'");
+			
+				};
+
+				for (var r = 0; r < window.ParticleGrid.getRowCount(); r++) {
+					var tmp = window.ParticleGrid.getValueAt(r,9);
+					if(tmp == 'P'){
+						window.ParticleGrid.setValueAt(r,3,parent.opener.ListParticles[r].srx);
+						window.ParticleGrid.setValueAt(r,4,parent.opener.ListParticles[r].sry);
+						window.ParticleGrid.setValueAt(r,5,parent.opener.ListParticles[r].srz);					
+					}
+				}
+ 				//window.ParticleGrid.table.childNodes[0].firstChild.cells[16].hidden=true;
+ 				//window.ParticleGrid.table.childNodes[0].firstChild.cells[17].hidden=true;
+ 				
+				window.ParticleGrid.tHead.childNodes[0].cells[0].width=10;
+				window.ParticleGrid.tHead.childNodes[0].cells[1].width=1;
+				window.ParticleGrid.tHead.childNodes[0].cells[2].width=1;
+				window.ParticleGrid.tHead.childNodes[0].cells[9].width=40;
+				window.ParticleGrid.tHead.childNodes[0].cells[10].width=10;
+				window.ParticleGrid.tHead.childNodes[0].cells[11].width=50;
+				window.ParticleGrid.tHead.childNodes[0].cells[12].width=50;
+				window.ParticleGrid.tHead.childNodes[0].cells[13].width=1;
+				window.ParticleGrid.tHead.childNodes[0].cells[14].width=5;	
+				window.ParticleGrid.tHead.childNodes[0].cells[15].width=60;
+			}
+
+			function clickColor(rowIndex){
+				var c = document.getElementById("Color"+rowIndex).value;
+				window.ParticleGrid.setValueAt(rowIndex, 11, c);
+    			var tmp = window.ParticleGrid.getValueAt(rowIndex,12);
+		     	if(tmp == 'none'){
+					var celli = window.ParticleGrid.getCell(rowIndex,12);
+					if(celli != undefined){
+	       				celli.innerHTML = "<canvas style='display: block; margin: auto' id='canvas_"+celli.rowIndex+"' width=16 height=16></canvas>";
+	       				var canvas=document.getElementById("canvas_"+celli.rowIndex);
+						var ctx=canvas.getContext("2d");
+						ctx.beginPath();
+						ctx.arc(7.5,7.5,7.5,0,Math.PI*2);
+						ctx.closePath();
+						ctx.fillStyle=c;
+						ctx.fill();
+						ctx.stroke();
+					}
+	     		}
+			}
+
+            EditableGrid.prototype.duplicate = function(rowIndex)
+            {
+            	// copy values from given row
+            	var values = this.getRowValues(rowIndex);
+            	values['name'] = values['name'] + ' (copy)';
+
+            	// get id for new row (max id + 1)
+            	var newRowId = 0;
+            	for (var r = 0; r < this.getRowCount(); r++) {
+            		var pv = this.getRowValues(r);
+            		//newRowId = Math.max(newRowId, parseInt(this.getRowId(r)) + 1);
+            		newRowId = Math.max(newRowId, parseInt(pv['id']) + 1);
+            	}
+            	values['id'] = newRowId;
+            	this.insertAfter(rowIndex, newRowId, values);
+            };
+
+            EditableGrid.prototype.interaction = function(rowIndex)
+            {
+            	if (confirm('Are you ready to apply changes to the particles ? ')) {
+            		applyChanges();
+            		parent.opener.restartAllParticles();
+            		
+            		wi_values = this.getRowValues(rowIndex);
+            		wi = window.open("listActions.html");
+            	}
+            };
+
+            function applyChanges(){
+            	for(var i=this.parent.opener.ListParticles.length-1; i>=0; i--){
+            			this.parent.opener.cleanupParticle(i);
+            			this.parent.opener.ListParticles.splice(i,1);
+            	}
+            	for (var r = 0; r < this.ParticleGrid.getRowCount(); r++) {
+            		var values = this.ParticleGrid.getRowValues(r);
+           			this.parent.opener.addNewParticle(values);
+            	}
+			}
+
+			function submitChanges(){
+				applyChanges();
+				this.parent.opener.cleanPInteractions();
+				this.parent.opener.setPInteractions();
+				this.parent.opener.restartAllParticles();
+				this.parent.opener.restartLines(); 
+				this.parent.opener.restartEqSurfaces();
+
+            	if(wi != null)
+            		wi.close();
+            	if(this.parent.opener.NSliders>0)
+            		this.parent.opener.loadSliders();
+	           	window.close();
+ 				return true;				
+			}
+
+
+			function addNewParticle(){
+				var values={};
+				values.name="test_"+Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 4);
+				values.label=values.name;
+				values.Q="0"; values.M0="1";
+				values.rx0="0"; values.ry0="0"; values.rz0="0";
+				values.vx0="0"; values.vy0="0"; values.vz0="0";
+				values.type="N";
+				values.radius="3";
+				values.color="#A0A0A0";
+				values.picture='none';
+				values.pimgs=1;
+				values.trace="N";
+				values.showlabel="N";
+
+				var newRowId = 0;
+            	for (var r = 0; r < this.ParticleGrid.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.ParticleGrid.getRowId(r)) + 1);
+
+				this.ParticleGrid.insertAfter(this.ParticleGrid.getRowCount(), newRowId, values);
+ 				return true;
+			}
+
+		</script>
+		
+	</head>
+	
+	<body>
+		<div id="tableParticles"></div>
+		<button onclick="return addNewParticle();">Add</button>
+		<input type="submit" value="Submit" onclick="return submitChanges();"/>
+		<button type="cancel" onclick="window.close();">Cancel</button>
+	</body>
+
+</html>

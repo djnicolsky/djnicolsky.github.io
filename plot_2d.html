@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<body style="margin: 0px;" onload='init();'>
+
+	<script src="three/js/libs/dat.gui.min.js"></script>
+	<script src="scripts/sprintf.js"></script>
+
+	<canvas id="myCanvas" style="border:1px solid #d3d3d3;">
+		Your browser does not support the HTML5 canvas tag.
+	</canvas>
+
+	<script>
+
+		var eC=[], c, ctx, ratio;
+
+var PIXEL_RATIO = (function () {
+    var ctx = document.getElementById("myCanvas").getContext("2d"),
+        dpr = window.devicePixelRatio || 1,
+        bsr = ctx.webkitBackingStorePixelRatio ||
+              ctx.mozBackingStorePixelRatio ||
+              ctx.msBackingStorePixelRatio ||
+              ctx.oBackingStorePixelRatio ||
+              ctx.backingStorePixelRatio || 1;
+
+    return dpr / bsr;
+})();
+
+
+createHiDPICanvas = function(w, h, ratio) {
+    if (!ratio) { ratio = PIXEL_RATIO; }
+    var can = document.getElementById("myCanvas");
+    can.width = w * ratio;
+    can.height = h * ratio;
+    can.style.width = w + "px";
+    can.style.height = h + "px";
+    can.getContext("2d").setTransform(ratio, 0, 0, ratio, 0, 0);
+    return can;
+}
+		
+
+		function init(){
+			c = createHiDPICanvas(400, 600, 4);
+
+			eC.AxisX=parent.opener.PLT2D.AxisX;
+			eC.AxisY=parent.opener.PLT2D.AxisY;
+			eC.Sx=parent.opener.PLT2D.Sx;
+			eC.Sy=parent.opener.PLT2D.Sy;
+			switch(parent.opener.PLT2D.OffsetX){
+				case "Left": eC.OffsetX=0.1; break;
+				case "Center": eC.OffsetX=0.5; break;
+				case "Right": eC.OffsetX=0.9; break;
+				default: eC.OffsetX=0.5;
+			}
+			switch(parent.opener.PLT2D.OffsetY){
+				case "Bottom": eC.OffsetY=0.1; break;
+				case "Center": eC.OffsetY=0.5; break;
+				case "Top": eC.OffsetY=0.9; break;
+				default: eC.OffsetY=0.5;
+			}
+			eC.Color=parent.opener.PLT2D.Color;
+			initGUI();			
+			drawAxis();
+			this.window.loaded = true;
+		}
+
+		function initGUI() {
+			var gui = new dat.GUI();
+			var eventAxisX = gui.add(eC, 'AxisX', [ 'Time', 'Rx', 'Ry', 'Rz', 'R', 'Vx', 'Vy', 'Vz', 'V', 'V^2', 'Mx', 'My', 'Mz', 'M', 'M^2', 'Ax', 'Ay', 'Az', 'A', 'A^2' ] );
+			var eventAxisY = gui.add(eC, 'AxisY', [ 'Time', 'Rx', 'Ry', 'Rz', 'R', 'Vx', 'Vy', 'Vz', 'V', 'V^2', 'Mx', 'My', 'Mz', 'M', 'M^2', 'Ax', 'Ay', 'Az', 'A', 'A^2' ] );
+			var eventOfX = gui.add(eC, 'OffsetX', { Left: 0.1, Center: 0.5, Right: 0.9 });
+			var eventOfY = gui.add(eC, 'OffsetY', { Bottom: 0.1, Center: 0.5, Top: 0.9 });
+			var eventSX = gui.add( eC, "Sx", 0.0, 10.0, 100.0 );
+			var eventSY = gui.add( eC, "Sy", 0.0, 10.0, 100.0 );
+			gui.close();
+
+			eventAxisX.onChange(function(value) {drawAxis();});
+			eventAxisY.onChange(function(value) {drawAxis();});
+			eventOfX.onChange(function(value) {drawAxis();});
+			eventOfY.onChange(function(value) {drawAxis();});
+			eventSX.onChange(function(value) {drawAxis();});
+			eventSY.onChange(function(value) {drawAxis();});
+			window.addEventListener( 'resize', drawAxis, false );
+		}
+
+
+		function drawTrajectory(particle, time, dt){
+			if(window == null)
+				return;
+			var X = window.innerWidth;
+			var Y = window.innerHeight;
+			var S1, D1; 
+
+			if(ctx == null) return;
+
+			switch(eC.AxisX) {
+				case 'Time': S1 = time; break;
+				case 'Rx':   S1 = particle.R[0]; break;
+				case 'Ry':   S1 = particle.R[1]; break;
+				case 'Rz':   S1 = particle.R[2]; break;
+				case 'Vx':   S1 = particle.V[0]; break;
+				case 'Vy':   S1 = particle.V[1]; break;
+				case 'Vz':   S1 = particle.V[2]; break;
+				default:     S1 = time;	break;
+			}
+
+			switch(eC.AxisY) {
+				case 'Time': D1 = time;	break;
+				case 'Rx':   D1 = particle.R[0]; break;
+				case 'Ry':   D1 = particle.R[1]; break;
+				case 'Rz':   D1 = particle.R[2]; break;
+				case 'Vx':   D1 = particle.V[0]; break;
+				case 'Vy':   D1 = particle.V[1]; break;
+				case 'Vz':   D1 = particle.V[2]; break;
+				default:     D1 = time; break;
+			}
+			if( particle.S != null ){
+				var Xo = X*eC.OffsetX;
+				var Yo = Y*eC.OffsetY;
+				ctx.strokeStyle=particle.values['color'];
+				ctx.lineWidth=2;
+				ctx.beginPath();
+				ctx.moveTo( Xo+particle.S*eC.Sx,  50+Yo-particle.D*eC.Sy);
+				ctx.lineTo(	Xo+S1*eC.Sx,       50+Yo-D1*eC.Sy);
+				ctx.stroke();
+			}
+			particle.S = S1; particle.D = D1;
+		}
+
+		function drawAxis()
+		{
+
+			c = createHiDPICanvas(window.innerWidth, window.innerHeight, 4);
+			ctx = c.getContext("2d");
+
+			var X = window.innerWidth;
+			var Y = window.innerHeight;
+			for (var r = 0; r < parent.opener.ListParticles.length; r++) 
+				parent.opener.ListParticles[r].S = null;
+
+			ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+			ctx.rect(0, 0, X, Y);
+			ctx.fillStyle = eC.Color;
+			ctx.fill();
+
+			ctx.strokeStyle="#CCCCCC";
+			ctx.beginPath();ctx.moveTo(X*0.05, 50+Y*eC.OffsetY);
+			ctx.lineTo(X*0.95, 50+Y*eC.OffsetY);ctx.stroke();
+			ctx.beginPath();ctx.moveTo(X*eC.OffsetX, 50+Y*0.05);
+			ctx.lineTo(X*eC.OffsetX, 50+Y*0.95);ctx.stroke();
+			ctx.strokeText(eC.AxisY, X*eC.OffsetX*1.05, 50+Y*0.05);
+			ctx.strokeText(eC.AxisX, X*0.95*0.95, 50+Y*eC.OffsetY*1.05);
+			var Xo = X*eC.OffsetX;
+			var Yo = Y*eC.OffsetY;
+			for(var i=0;i<50;i++){
+				if(Xo+i*50<X*0.9){
+					ctx.beginPath();ctx.moveTo(Xo+i*50,50+Y*eC.OffsetY);
+			    	ctx.lineTo(Xo+i*50,50+Y*eC.OffsetY+3);ctx.stroke();
+					ctx.strokeText(sprintf("%2d",(i*50)/eC.Sx), Xo+i*50, 50+Y*eC.OffsetY-3);
+				}
+				if(Xo-i*50>X*0.1){
+					ctx.beginPath();ctx.moveTo(Xo-i*50,50+Y*eC.OffsetY);
+			    	ctx.lineTo(Xo-i*50, 50+Y*eC.OffsetY+3);ctx.stroke();
+					ctx.strokeText(sprintf("%2d",(-i*50)/eC.Sx), Xo-i*50, 50+Y*eC.OffsetY-3);
+				}
+				if(Yo+i*50<Y*0.9){
+					ctx.beginPath();ctx.moveTo(X*eC.OffsetX,Yo+i*50+50);
+			    	ctx.lineTo(X*eC.OffsetX+3,Yo+i*50+50);ctx.stroke();
+					ctx.strokeText(sprintf("%2d",(-i*50)/eC.Sy), X*eC.OffsetX+5, Yo+i*50+50+2);
+				}
+				if(Yo-i*50>Y*0.1){
+					ctx.beginPath();ctx.moveTo(X*eC.OffsetX,Yo-i*50+50);
+			    	ctx.lineTo(X*eC.OffsetX+3, Yo-i*50+50);ctx.stroke();
+					ctx.strokeText(sprintf("%2d",(i*50)/eC.Sy), X*eC.OffsetX+5, Yo-i*50+50+2);
+				}
+			}
+		}
+	</script>
+</body>
+</html>

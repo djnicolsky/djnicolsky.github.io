@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>List of Segments</title>
+		
+		<script src="editablegrid/editablegrid.js"></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_renderers.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_editors.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_validators.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_utils.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_charts.js" ></script>
+		<link rel="stylesheet" href="editablegrid/editablegrid.css" type="text/css" media="screen">
+		
+		<script src="editablegrid/extensions/jquery/jquery-1.6.4.min.js" ></script>
+		<script src="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.min.js" ></script>
+		<link rel="stylesheet" href="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.css" type="text/css" media="screen">
+		<script src="eqsurface.js"></script>
+
+        <link rel="stylesheet" type="text/css" href="simple.css" media="screen"/>
+		
+		<script>
+			window.onload = function() {
+
+				// this approach is interesting if you need to dynamically create data in Javascript
+				var metaSurface = [];
+				metaSurface.push({ name: "name", label: "Name", datatype: "string", editable: true});
+				metaSurface.push({ name: "label", label: "Label", datatype: "string", editable: true});
+				metaSurface.push({ name: "fstr", label:"Function", datatype: "string", editable: true});
+				metaSurface.push({ name: "level", label:"Level", datatype: "double", editable: true});
+				metaSurface.push({ name: "size", label:"Size", datatype: "double", editable: true});
+				metaSurface.push({ name: "minX", label:"Min X", datatype: "double", editable: true});
+				metaSurface.push({ name: "maxX", label:"Max X", datatype: "double", editable: true});
+				metaSurface.push({ name: "minY", label:"Min Y", datatype: "double", editable: true});
+				metaSurface.push({ name: "maxY", label:"Max Y", datatype: "double", editable: true});
+				metaSurface.push({ name: "minZ", label:"Min Z", datatype: "double", editable: true});
+				metaSurface.push({ name: "maxZ", label:"Max Z", datatype: "double", editable: true});
+				metaSurface.push({ name: "color", label:"Color", datatype: "string", editable: false});
+				metaSurface.push({ name: "opacity", label:"Opacity", datatype: "double", editable: true});
+				metaSurface.push({ name: "action", label: "D/D", datatype: "html", editable: false});
+
+				metaSurface[2].values = {"E":"Electric Potential"};
+
+				SurfaceGrid = new EditableGrid("3DSpaceSurfaces");
+				var newSurfaceArray = [];
+				for(var i=0; i<parent.opener.listSurfaces.length; i++){
+					var tmp = parent.opener.listSurfaces[i].returnValues();
+					newSurfaceArray.push({name: 'values', values: JSON.parse(JSON.stringify(tmp))});
+				}
+				SurfaceGrid.load({"metadata": metaSurface, "data": newSurfaceArray});
+
+		       	var clrSurface = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML =  "<input type='color' id='color"+cell.rowIndex+"' onchange='clickColor("+cell.rowIndex+")' value='"+value.toLowerCase()+"' style='width:85%;''>";
+		     		
+		     	} });
+                var afSurface = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML = "<a onclick=\"if (confirm('Are you sure you want to delete this surface? ')) SurfaceGrid.remove(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+			    					 "<img src=\"delete.png\" border=\"0\" alt=\"delete\" title=\"delete\"/></a>";
+		         	cell.innerHTML+= "&nbsp;<a onclick=\"SurfaceGrid.duplicate(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+		                         	 "<img src=\"duplicate.png\" border=\"0\" alt=\"duplicate\" title=\"duplicate\"/></a>";
+		       	}});	       	
+                SurfaceGrid.setCellRenderer("action", afSurface);
+                SurfaceGrid.setCellRenderer("color", clrSurface);
+				SurfaceGrid.renderGrid("tableSurfaces", "testgrid");
+			}
+
+            EditableGrid.prototype.duplicate = function(rowIndex)
+            {
+            	// copy values from given row
+            	var values = this.getRowValues(rowIndex);
+            	values['name'] = values['name'] + ' (copy)';
+
+            	var newRowId = 0;
+            	for (var r = 0; r < this.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.getRowId(r)) + 1);
+            	this.insertAfter(rowIndex, newRowId, values);
+            };
+
+            function applyChanges(){
+            	for(var i=this.parent.opener.listSurfaces.length-1; i>=0; i--){
+            		this.parent.opener.listSurfaces[i].cleanup();
+            		this.parent.opener.listSurfaces.splice(i,1);
+            	}
+
+            	for (var r = 0; r < this.SurfaceGrid.getRowCount(); r++) {
+            		var values = this.SurfaceGrid.getRowValues(r);
+					this.parent.opener.addNewSurface(values);
+            	}
+            	this.parent.opener.restartEqSurfaces();
+            	window.close();
+ 				return true;
+			}
+
+			function addNewSurface(){
+				var values={};
+				values.name="test_"+Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 8);
+				values.label=values.name;
+				values.size=30; values.fstr="E"; values.level=0.01; values.color='#0000DD'; 
+				values.minX=-200; values.maxX=200;
+				values.minY=-200; values.maxY=200;
+				values.minZ=-200; values.maxZ=200;
+				values.opacity = 0.9;
+
+				var newRowId = 0;
+            	for (var r = 0; r < this.SurfaceGrid.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.SurfaceGrid.getRowId(r)) + 1);
+
+				this.SurfaceGrid.insertAfter(this.SurfaceGrid.getRowCount(), newRowId, values);
+ 				return true;
+			}
+			function clickColor(rowIndex){
+				var c = document.getElementById("color"+rowIndex).value;
+				window.SurfaceGrid.setValueAt(rowIndex, 11, c);
+			}
+		</script>		
+	</head>
+	
+	<body>
+		<div id="tableSurfaces"></div>
+		<button onclick="return addNewSurface();">Add Surface</button>
+		<hr>
+		<input type="submit" value="Submit" onclick="return applyChanges();"/>
+		<button type="cancel" onclick="window.close();">Cancel</button>
+    </body>
+
+</html>

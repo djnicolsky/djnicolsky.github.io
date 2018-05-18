@@ -1,0 +1,164 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>List of Segments</title>
+		
+		<script src="editablegrid/editablegrid.js"></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_renderers.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_editors.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_validators.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_utils.js" ></script>
+		<!-- [DO NOT DEPLOY] --> <script src="editablegrid/editablegrid_charts.js" ></script>
+		<link rel="stylesheet" href="editablegrid/editablegrid.css" type="text/css" media="screen">
+		
+		<script src="editablegrid/extensions/jquery/jquery-1.6.4.min.js" ></script>
+		<script src="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.min.js" ></script>
+		<link rel="stylesheet" href="editablegrid/extensions/jquery/jquery-ui-1.8.16.custom.css" type="text/css" media="screen">
+		<script src="segment.js"></script>
+
+        <link rel="stylesheet" type="text/css" href="simple.css" media="screen"/>
+		
+		<script>
+			window.onload = function() {
+
+				// this approach is interesting if you need to dynamically create data in Javascript
+				var metaRing = [];
+				metaRing.push({ name: "name", label: "Name", datatype: "string", editable: true});
+				metaRing.push({ name: "label", label: "Label", datatype: "string", editable: true});
+				metaRing.push({ name: "X0", label:"X0", datatype: "double", editable: true});
+				metaRing.push({ name: "Y0", label:"Y0", datatype: "double", editable: true});
+				metaRing.push({ name: "Z0", label:"Z0", datatype: "double", editable: true});
+				metaRing.push({ name: "Nx", label:"Nx", datatype: "double", editable: true});
+				metaRing.push({ name: "Ny", label:"Ny", datatype: "double", editable: true});
+				metaRing.push({ name: "Nz", label:"Nz", datatype: "double", editable: true});
+				metaRing.push({ name: "radius", label:"R", datatype: "double", editable: true});
+				metaRing.push({ name: "current",  label:"I", datatype: "double", editable: true});
+				metaRing.push({ name: "action", label: "D/D", datatype: "html", editable: false});
+
+				var metaSegment = [];
+				metaSegment.push({ name: "name", label: "Name", datatype: "string", editable: true});
+				metaSegment.push({ name: "label", label: "Label", datatype: "string", editable: true});
+				metaSegment.push({ name: "X0", label:"X0", datatype: "double", editable: true});
+				metaSegment.push({ name: "Y0", label:"Y0", datatype: "double", editable: true});
+				metaSegment.push({ name: "Z0", label:"Z0", datatype: "double", editable: true});
+				metaSegment.push({ name: "X1", label:"X1", datatype: "double", editable: true});
+				metaSegment.push({ name: "Y1", label:"Y1", datatype: "double", editable: true});
+				metaSegment.push({ name: "Z1", label:"Z1", datatype: "double", editable: true});
+				metaSegment.push({ name: "current",  label:"I", datatype: "double", editable: true});
+				metaSegment.push({ name: "action", label: "D/D", datatype: "html", editable: false});
+
+				RingGrid = new EditableGrid("3DSpaceRings");
+				SegmentGrid = new EditableGrid("3DSpaceSegments");
+				var newRingArray = [], newSegmentArray = [];
+				for(var i=0; i<parent.opener.listRings.length; i++){
+					var tmp = parent.opener.listRings[i].returnValues();
+					if(tmp.type == 'Ring')
+						newRingArray.push({name: 'values', values: JSON.parse(JSON.stringify(tmp))});
+					if(tmp.type == 'Segment')
+						newSegmentArray.push({name: 'values', values: JSON.parse(JSON.stringify(tmp))});
+
+				}
+				RingGrid.load({"metadata": metaRing, "data": newRingArray});
+				SegmentGrid.load({"metadata": metaSegment, "data": newSegmentArray});
+
+                var afRing = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML = "<a onclick=\"if (confirm('Are you sure you want to delete this ring? ')) RingGrid.remove(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+			    					 "<img src=\"delete.png\" border=\"0\" alt=\"delete\" title=\"delete\"/></a>";
+		         	cell.innerHTML+= "&nbsp;<a onclick=\"RingGrid.duplicate(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+		                         	 "<img src=\"duplicate.png\" border=\"0\" alt=\"duplicate\" title=\"duplicate\"/></a>";
+		       	}});
+                var afSegment = new CellRenderer({render: function(cell, value) {
+		     		cell.innerHTML = "<a onclick=\"if (confirm('Are you sure you want to delete this segment? ')) SegmentGrid.remove(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+			    					 "<img src=\"delete.png\" border=\"0\" alt=\"delete\" title=\"delete\"/></a>";
+		         	cell.innerHTML+= "&nbsp;<a onclick=\"SegmentGrid.duplicate(" + cell.rowIndex + ");\" style=\"cursor:pointer\">" +
+		                         	 "<img src=\"duplicate.png\" border=\"0\" alt=\"duplicate\" title=\"duplicate\"/></a>";
+		       	}});		       	
+                RingGrid.setCellRenderer("action", afRing);
+                SegmentGrid.setCellRenderer("action", afSegment);
+				RingGrid.renderGrid("tableRings", "testgrid");
+				SegmentGrid.renderGrid("tableSegments", "testgrid");
+			}
+
+            EditableGrid.prototype.duplicate = function(rowIndex)
+            {
+            	// copy values from given row
+            	var values = this.getRowValues(rowIndex);
+            	values['name'] = values['name'] + ' (copy)';
+
+            	var newRowId = 0;
+            	for (var r = 0; r < this.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.getRowId(r)) + 1);
+            	this.insertAfter(rowIndex, newRowId, values);
+            };
+
+            function applyChanges(){
+            	for(var i=this.parent.opener.listRings.length-1; i>=0; i--){
+            		this.parent.opener.cleanupRing(i);
+            		this.parent.opener.listRings.splice(i,1);
+            	}
+
+            	for (var r = 0; r < this.RingGrid.getRowCount(); r++) {
+            		var values = this.RingGrid.getRowValues(r);
+            		values.type = 'Ring';
+            		values.X1="50";  values.Y1="0"; values.Z1="0";
+					this.parent.opener.addNewRing(values);
+            	}
+            	for (var r = 0; r < this.SegmentGrid.getRowCount(); r++) {
+            		var values = this.SegmentGrid.getRowValues(r);
+            		values.type = 'Segment';
+            		values.Nx = 1;   values.Ny = 0;   values.Nz = 0; 	values.radius = 0;
+					this.parent.opener.addNewRing(values);
+            	}
+            	this.parent.opener.restartLines();
+            	window.close();
+ 				return true;
+			}
+
+			function addNewRing(){
+				var values={};
+				values.name="test_"+Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 8);
+				values.label=values.name;
+				values.X0="0"; values.Y0="0"; values.Z0="0";
+				values.Nx="1"; values.Ny="0"; values.Nz="0";
+				values.current="0"; values.radius="10";
+
+				var newRowId = 0;
+            	for (var r = 0; r < this.RingGrid.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.RingGrid.getRowId(r)) + 1);
+
+				this.RingGrid.insertAfter(this.RingGrid.getRowCount(), newRowId, values);
+ 				return true;
+			}
+			function addNewSegment(){
+				var values={};
+				values.name="test_"+Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 8);
+				values.label=values.name;
+				values.X0="-50"; values.Y0="0"; values.Z0="0";
+				values.X1="50";  values.Y1="0"; values.Z1="0";
+				values.current="0";
+
+				var newRowId = 0;
+            	for (var r = 0; r < this.SegmentGrid.getRowCount(); r++) 
+            		newRowId = Math.max(newRowId, parseInt(this.SegmentGrid.getRowId(r)) + 1);
+
+				this.SegmentGrid.insertAfter(this.SegmentGrid.getRowCount(), newRowId, values);
+ 				return true;
+			}			
+
+		</script>		
+	</head>
+	
+	<body>
+		<div id="tableRings"></div>
+		<button onclick="return addNewRing();">Add Ring</button>
+		<hr>
+		<div id="tableSegments"></div>
+		<button onclick="return addNewSegment();">Add Segment</button>
+		<hr>
+		<input type="submit" value="Submit" onclick="return applyChanges();"/>
+		<button type="cancel" onclick="window.close();">Cancel</button>
+    </body>
+
+</html>
