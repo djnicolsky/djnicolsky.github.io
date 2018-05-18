@@ -32,19 +32,19 @@ var ModelScript='', ModelSliders='', ModelStreams='';
 if(ModelScenario != 'none'){
     var request = new XMLHttpRequest();
     request.overrideMimeType('text/plain; charset=x-user-defined');
-    request.open("GET", "http://localhost/physics/scenarios/"+ModelScenario[0]+".model", false);
+    request.open("GET", "https://djnicolsky.github.io/physics/scenarios/"+ModelScenario[0]+".model", false);
     request.send(null);
     ModelScript = request.responseText;
 
     if(ModelScenario[1] == 'y'){
-      	request.open("GET", "http://localhost/physics/scenarios/"+ModelScenario[0]+".slider", false);
+      	request.open("GET", "https://djnicolsky.github.io/physics/scenarios/"+ModelScenario[0]+".slider", false);
         request.overrideMimeType('text/plain; charset=x-user-defined');
    	    request.send(null);
    	    ModelSliders = request.responseText;
     }
 
     if(ModelScenario[2] == 'y'){
-        request.open("GET", "http://localhost/physics/scenarios/"+ModelScenario[0]+".stream", false);
+        request.open("GET", "https://djnicolsky.github.io/physics/scenarios/"+ModelScenario[0]+".stream", false);
         request.overrideMimeType('text/plain; charset=x-user-defined');
         request.send(null);
         ModelStreams = request.responseText;
